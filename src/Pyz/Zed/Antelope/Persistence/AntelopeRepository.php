@@ -1,189 +1,135 @@
 <?php
 
-declare(strict_types=1);
 
 namespace Pyz\Zed\Antelope\Persistence;
 
+use Generated\Shared\Transfer\AntelopeCollectionTransfer;
 use Generated\Shared\Transfer\AntelopeCriteriaTransfer;
+use Generated\Shared\Transfer\AntelopeLocationCollectionTransfer;
 use Generated\Shared\Transfer\AntelopeLocationCriteriaTransfer;
+use Generated\Shared\Transfer\AntelopeLocationResponseTransfer;
 use Generated\Shared\Transfer\AntelopeLocationTransfer;
-use Generated\Shared\Transfer\AntelopeResponseTransfer;
 use Generated\Shared\Transfer\AntelopeTransfer;
+use Pyz\Zed\Antelope\Persistence\Exception\EntityNotFoundException;
 use Spryker\Zed\Kernel\Persistence\AbstractRepository;
 
 /**
- * @method \Pyz\Zed\Antelope\Persistence\AntelopePersistenceFactory getFactory()
+ * @method AntelopePersistenceFactory getFactory()
  */
 class AntelopeRepository extends AbstractRepository implements
     AntelopeRepositoryInterface
 {
-    public function getAntelope(
-        AntelopeCriteriaTransfer $antelopeCriteriaTransfer
-    ): ?AntelopeTransfer {
-        $antelopeEntity = $this->getFactory()->createAntelopeQuery()->filterByName(
-            $antelopeCriteriaTransfer->getName(),
-        )->findOne();
+    /**
+     * @throws \Pyz\Zed\Antelope\Persistence\Exception\EntityNotFoundException
+     */
+
+
+    public function getAntelope(AntelopeCriteriaTransfer $antelopeCriteria): AntelopeTransfer
+    {
+        $antelopeEntity = $this->getFactory()
+            ->createAntelopeQuery()
+            ->filterByName($antelopeCriteria->getName())
+            ->findOne();
+
         if (!$antelopeEntity) {
-            return null;
+            throw new Exception('Antelope not found');
         }
-        return (new AntelopeTransfer())->fromArray($antelopeEntity->toArray(),
-            true);
-    }
-    public function getAntelopeByLocationId(
-        AntelopeCriteriaTransfer $antelopeCriteriaTransfer
-    ): ?AntelopeTransfer {
-        if ($antelopeCriteriaTransfer->getIdLocation()) {
-            $antelopeEntity = $this->getFactory()->createAntelopeQuery()->filterByPyzAntelopeLocation(
-                $antelopeCriteriaTransfer->getIdLocation(),
-            )->findOne();
-        }
-        if (!$antelopeEntity) {
-            return null;
-        }
-        return (new AntelopeTransfer())->fromArray($antelopeEntity->toArray(),
-            true);
+
+        $antelopeTransfer = new AntelopeTransfer();
+        return $antelopeTransfer->fromArray($antelopeEntity->toArray(), true);
     }
 
-    public function getAntelopeLocationById(int $idLocation
-    ): ?AntelopeLocationTransfer {
+    public function getAntelopeLocation( AntelopeLocationCriteriaTransfer $antelopeLocationCriteria,): AntelopeLocationResponseTransfer
+    {
+
+        if ($antelopeLocationCriteria->getIdAntelopeLocation() !== null) {
+            return $this->getAntelopeLocationById($antelopeLocationCriteria->getIdAntelopeLocation());
+        }
+        if ($antelopeLocationCriteria->getLocationName() === null) {
+            throw new EntityNotFoundException('No Antelope Location given');
+        }
+
+        return $this->getAntelopeLocationByName($antelopeLocationCriteria->getLocationName());
+    }
+
+    /**
+     * @throws \Pyz\Zed\Antelope\Persistence\Exception\EntityNotFoundException
+     */
+    public function getAntelopeLocationById(int $idLocation): AntelopeLocationResponseTransfer
+    {
         $antelopeLocationEntity = $this->getFactory()
             ->createAntelopeLocationQuery()->findPk($idLocation);
 
-        if (!$antelopeLocationEntity) {
-            return null;
+        if ($antelopeLocationEntity === null) {
+            throw new EntityNotFoundException(sprintf('Antelope Location %d not found', $idLocation));
         }
-        return (new AntelopeLocationTransfer())->fromArray($antelopeLocationEntity->toArray(),
-            true);
-    }
+        $antelopeLocation = (new AntelopeLocationTransfer())->fromArray(
+            $antelopeLocationEntity->toArray(),
+            true,
+            );
+        $antelopeLocationResponseTransfer = new AntelopeLocationResponseTransfer();
+        $antelopeLocationResponseTransfer->setIsSuccessFul(true);
+        $antelopeLocationResponseTransfer->setAntelopeLocationOrFail($antelopeLocation);
 
-    public function getAntelopeLocation(AntelopeLocationCriteriaTransfer $antelopeLocationCriteriaTransfer
-    ): ?AntelopeLocationTransfer {
-        $antelopeLocationEntity = $this->getFactory()
-            ->createAntelopeLocationQuery()->filterByLocationName($antelopeLocationCriteriaTransfer->getLocationName())->findOne();
-        if (!$antelopeLocationEntity) {
-            return null;
-        }
-        return (new AntelopeLocationTransfer())->fromArray($antelopeLocationEntity->toArray(),
-            true);
+        return $antelopeLocationResponseTransfer;
     }
 
     /**
-     * @param AntelopeCriteriaTransfer $antelopeCriteriaTransfer
-     * @return array<AntelopeResponseTransfer>|null
+     * @throws \Pyz\Zed\Antelope\Persistence\Exception\EntityNotFoundException
      */
-    public function getAntelopes(
-        AntelopeCriteriaTransfer $antelopeCriteriaTransfer
-    ): ?AntelopeResponseTransfer {
+    public function getAntelopeLocationByName(string $antelopeLocationName): AntelopeLocationResponseTransfer
+    {
+        $antelopeLocationEntity = $this->getFactory()
+            ->createAntelopeLocationQuery()->findByLocationName($antelopeLocationName);
 
-        $antelopeEntities = $this->getFactory()->createAntelopeQuery();
-        $antelopeEntities->innerJoinWithPyzAntelopeLocation();
-        $antelopeEntities->find();
-        $locationTransfer = new AntelopeLocationTransfer();
-        $locationCriteria = new AntelopeLocationCriteriaTransfer();
-        if (!$antelopeEntities) {
-            return null;
+        if ($antelopeLocationEntity === null) {
+            throw new EntityNotFoundException(sprintf('Antelope Location %d not found', $antelopeLocationEntity));
         }
-        /** @var AntelopeResponseTransfer $antelopItem */
-        $antelopItem = new AntelopeResponseTransfer();
-        foreach ($antelopeEntities as $antelopeEntity) {
-            $anvelope = (new AntelopeTransfer())->fromArray($antelopeEntity->toArray(),
-                true);
-//            $locationTransfer->fromArray($antelopeEntity->toArray(), true);
+        $antelopeLocation = (new AntelopeLocationTransfer())->fromArray(
+            $antelopeLocationEntity->toArray(),
+            true,
+            );
+        $antelopeLocationResponseTransfer = new AntelopeLocationResponseTransfer();
+        $antelopeLocationResponseTransfer->setIsSuccessFul(true);
+        $antelopeLocationResponseTransfer->setAntelopeLocationOrFail($antelopeLocation);
 
-            $locationTransfer = $this->getAntelopeLocationById($anvelope->getIdLocation());
-            $anvelope->setLocation($locationTransfer->getLocationName());
-            $antelopItem->addItem($anvelope);
+        return $antelopeLocationResponseTransfer;
+    }
+
+    public function findAntelopeLocationCollection(
+    AntelopeLocationCriteriaTransfer $criteriaTransfer,
+    ): AntelopeLocationCollectionTransfer {
+        $query = $this->getFactory()->createAntelopeLocationQuery();
+
+        if ($criteriaTransfer->getLocationName() !== null) {
+            $query->filterByLocationName($criteriaTransfer->getLocationName());
         }
-        return $antelopItem;
+        if ($criteriaTransfer->getIdAntelopeLocation() !== null) {
+            $query->filterByLocationName($criteriaTransfer->getIdAntelopeLocation());
+        }
+
+        $antelopeLocations = $query->find();
+
+        $antelopeLocationMapper = $this->getFactory()->createAntelopeLocationMapper();
+        $collectionTransfer = $antelopeLocationMapper->mapAntelopeLocationEntitiesToCollectionTransfer(
+            $antelopeLocations,
+            );
+
+        return $collectionTransfer;
     }
 
     public function getAntelopeCollection(AntelopeCriteriaTransfer $antelopeCriteriaTransfer
-    ): AntelopeCollectionTransfer {
-        $antelopeEntities = $this->getFactory()->createAntelopeQuery();
-        $antelopeEntities->joinWithPyzAntelopeLocation()
-            ->joinWithPyzAntelopeType();
-        $antelopeCollectionTransfer = new AntelopeCollectionTransfer();
-        $paginationTransfer = $antelopeCriteriaTransfer->getPagination();
-        $this->applySearch($antelopeEntities, $antelopeCriteriaTransfer);
-        $this->applySorting($antelopeEntities, $antelopeCriteriaTransfer);
-        if ($paginationTransfer) {
-            $this->applyPagination($paginationTransfer, $antelopeEntities);
+): AntelopeCollectionTransfer {
+        $query = $this->getFactory()->createAntelopeQuery();
+
+        if ($antelopeCriteriaTransfer->getName() !== null) {
+            $query->filterByName($antelopeCriteriaTransfer->getName());
         }
-        $antelopeCollectionTransfer->setPagination($paginationTransfer);
 
-        $antelopeCollection = $antelopeEntities->find();
-
-        return $this->getFactory()->createAntelopeMapper()
-            ->mapAntelopeCollectionToAntelopeCollectionTransfer(
-                $antelopeCollection,
-                $antelopeCollectionTransfer,
+        $antelopeEntities = $query->find();
+        $antelopeMapper = $this->getFactory()->createAntelopeMapper();
+        return $antelopeMapper->mapAntelopeEntityCollectionToAntelopeCollectionTransfer(
+            $antelopeEntities
         );
-    }
-    protected function applySorting(
-        PyzAntelopeQuery $antelopeEntities,
-        AntelopeCriteriaTransfer $antelopeCriteriaTransfer,
-    ): void {
-        foreach ($antelopeCriteriaTransfer->getSortCollection() as $sortTransfer) {
-            $columnName = $sortTransfer->getField();
-            $order = $sortTransfer->getIsAscending() ? CriteriaAlias::ASC : CriteriaAlias::DESC;
-            $antelopeEntities->orderBy($columnName, $order);
-        }
-    }
-    /**
-     * @return void
-     */
-    private function applySearch(
-        PyzAntelopeQuery $antelopeEntities,
-        AntelopeCriteriaTransfer $antelopeCriteriaTransfer,
-        ): void {
-        $antelopeConditions = $antelopeCriteriaTransfer->getAntelopeConditions();
-        if (!$antelopeConditions) {
-            return;
-        }
-        if ($idAntelope = $antelopeConditions->getIdAntelope()) {
-            $antelopeEntities->_or()->filterByIdantelope($idAntelope);
-        }
-        if ($name = $antelopeConditions->getName()) {
-            $likePattern = "%$name%";
-            $antelopeEntities->_or()->filterByName_Like($likePattern);
-        }
-        if ($antelopeIds = $antelopeConditions->getAntelopeIds()) {
-            $antelopeEntities->_or()->filterByIdantelope_In($antelopeIds);
-        }
-        if ($idLocation = $antelopeConditions->getLocationId()) {
-            $antelopeEntities->_or()->filterByLocationId($idLocation);
-        }
-        if ($idType = $antelopeConditions->getTypeId()) {
-            $antelopeEntities->_or()->filterByTypeId($idType);
-        }
-    }
-
-    /**
-     * @return void
-     */
-    private function applyPagination(
-        PaginationTransfer $paginationTransfer,
-        PyzAntelopeQuery $antelopeEntities
-    ): void {
-        if ($paginationTransfer->getOffset() !== null && $paginationTransfer->getLimit() > 0) {
-            $paginationTransfer->setNbResults($antelopeEntities->count());
-            $antelopeEntities->setOffset(+$paginationTransfer->getOffset());
-            $antelopeEntities->setLimit(+$paginationTransfer->getLimit());
-
-            return;
-        }
-        if ($paginationTransfer->getPage() !== null && $paginationTransfer->getMaxPerPage()) {
-            $pager = $antelopeEntities->paginate(
-                $paginationTransfer->getPage(),
-                $paginationTransfer->getMaxPerPage(),
-                        );
-            $paginationTransfer->setNbResults($pager->getNbResults())
-                ->setFirstIndex($pager->getFirstIndex())
-                ->setLastIndex($pager->getLastIndex())
-                ->setNextPage($pager->getNextPage())
-                ->setPreviousPage($pager->getPreviousPage())
-                ->setFirstPage($pager->getFirstPage())
-                ->setLastPage($pager->getLastPage());
-        }
     }
 }
